@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Presentation Title</title>
+    <meta name="description" content="Some description about the slides">
+    <meta name="author" content="You">
+    <link rel="stylesheet" href="css/main.css">
+  </head>
+  <body>
+    <textarea id="source">name: title
+class: center, middle
+
+# Ionic2/3 Anti Pattern
+---
+name: agenda
+
+# Agenda
+
+1. Introduction
+1. Component
+1. Style
+1. Routing
+1. Backend
+1. Native
+1. Misc
+1. Conclusion
+---
+name: introduction
+
+# Introduction
+
+Ionic は簡単にアプリを作れます。
+
+
+しかし、実プロダクトでは罠も多い！
+
+Ionic で、[テクノロジーニュースアプリ TechFeed](https://techfeed.io)
+を作ったときに直面した問題と対応などを紹介します。
+
+.center.techfeed-log[[
+  ![TechFeed Icon](./img/logo-app-and-text.png)
+](https://techfeed.io)]
+
+
+（ケースバイケースもあり、必ずしも正解とは限りません。異論反論、ご意見ください！！）
+
+参考: [Angular 2アンチパターン集](http://qiita.com/armorik83/items/90b60fae2622f7c1f1a2)
+---
+name: component
+
+# Component編
+
+IonicならではのComponent設計、Ionic Componentの注意点など
+
+（Angularに纏わることが多いが、、）
+
+---
+## .pattern[ページの初期化に`ngOnInit`を使う]
+### 問題点
+Angularではコンポーネントの初期化は、ngOnInitを使う[パターン](https://qiita.com/armorik83/items/90b60fae2622f7c1f1a2#component%E3%81%AE%E5%88%9D%E6%9C%9F%E5%8C%96%E5%87%A6%E7%90%86%E3%82%92constructor%E3%81%AB%E6%9B%B8%E3%81%8F)がある。
+
+Ionicにもライフサイクルがあり、Angularと同じようなフックが混在するのは混乱をきたす。
+
+---
+## .pattern[ページの初期化に`ngOnInit`を使う]
+### 解決策
+
+ページの初期化には [NavController](https://ionicframework.com/docs/api/navigation/NavController/) が提供する
+[Lifecycle events](https://ionicframework.com/docs/api/navigation/NavController/#lifecycle-events) というものがあり、
+ページのライフサイクル
+
+- ionViewDidLoad / ionViewWillUnload
+- ionViewWillEnter / ionViewDidEnter
+- ionViewWillLeave / ionViewDidLeave
+- ionViewCanEnter / ionViewCanLeave
+
+ページスタックをもつIonicの特長で、ページ制御によく使われる。  
+こちらをベースにした方が混乱が少ない。
+
+ページの初期化は`ngOnInit`ではなく`ionViewDidLoad`、  
+表示する度に行う処理（popで戻ったときにデータを更新など）は`ionViewWillEnter`を使う。
+
+---
+## .pattern[ページの初期化に`ngOnInit`を使う]
+### 注意
+- ページ以外のComponentやDirectiveでは発火しない。
+  - （正確にはNavControllerで制御しないコンポーネント）
+- `ionViewWillLoad`でFetchしてアニメーションして... など色々合わせるとモバイル端末でパフォーマンスが厳しいときも
+
+> 結局、ページはIonicライフサイクル、それ以外のコンポーネントはAngularの、と分ける必要があり、
+慣れないとやはり混乱する。
+Angularへ寄せていくというのもありだとは思う。
+どちらにせよルール化しておくことが重要。
+
+参考:
+- [Navigating Lifecycle Events!](http://blog.ionic.io/navigating-lifecycle-events/)
+- [Page Lifecycle Hooks in Ionic 2](https://webcake.co/page-lifecycle-hooks-in-ionic-2/)
+---
+## .pattern[Ionic標準コンポーネントを継承して拡張する]
+### 問題点
+標準ボタンの挙動をちょっと変えたい、とかたまにある。
+そのとき、Buttonクラスを継承するのはあまり好ましくない。
+
+- Componentのテンプレートやスタイルが再利用できない
+  - Angular 2.3 でComponentのMetadataやLifecycleHooksなどは継承されるようになった！
+  （[Component Inheritance in Angular 2](https://scotch.io/tutorials/component-inheritance-in-angular-2)）
+  が、テンプレートやスタイルは自分で書く必要がある
+- 継承はコンポーネントへの依存度が高くなり、バージョンアップ毎にツラい
+  - 特に private的なものは良く変わる。
+
+---
+## .pattern[Ionic標準コンポーネントを継承して拡張する]
+### 解決策
+継承よりも移譲、または属性ディレクティブとか作るのがよさげ。
+
+例:
+```
+  <button ion-button my-directive>
+```
+
+参考: [Component composition in Angular2 — Part 1](https://medium.com/@ttemplier/component-composition-in-angular2-part-1-33f50f402906)
+---
+## .pattern[スタイル変更だけに属性ディレクティブを使う]
+### 問題点
+[Angularの属性ディレクティブのドキュメント](https://angular.io/guide/attribute-directives)には、スタイル変更の例がある。
+これを ionicでやろうとすると、色々問題がある。
+
+- デバイス毎のUIをディレクティブで出し分けるのはめんどくさい。
+  - ionicではデバイス毎のUIを出し分ける。
+- コンパイルが遅い。
+  - ちょっとスタイル変えるだけでwebpackビルドが走り、時間がかかる。
+
+---
+## .pattern[スタイル変更だけに属性ディレクティブを使う]
+### 解決策
+スタイルだけならCSS（sass）で対応する。コンパイルも早い。
+
+そもそもIonicの標準コンポーネントは、スタイル変数の上書きだけでかなりカスタマイズできるようになっている。
+
+参考: [Overriding Ionic Sass Variables](https://ionicframework.com/docs/theming/overriding-ionic-variables/)
+---
+## .pattern[Providerのイベントを`subscribe`したままにする]
+### 問題点
+Angularの`EventEmitter`はRxJSの`Subject`を継承している。
+
+Componentやページのように何度も作成されるもののなかで`subscribe`すると、
+その度に`subscription`が作成され、解放しないとメモリリークする。
+
+httpリクエストのような1回で終わるものはよいが、
+`user$`のような継続的なものを`subscribe`していると危ない。
+
+---
+## .pattern[Providerのイベントを`subscribe`したままにする]
+### 解決策
+Componentの`onDestroy`や`ionViewWillUnload`で`unsubscribe`する。
+ページによっては `ionViewDidLeave` がより効果的。
+
+`subscription`にまとめて`unsubscribe`するのが便利。
+
+```
+  this.subscriptions = new Subscription();
+
+  ionViewDidLoad() {
+    this.subscriptions.add(...)
+    this.subscriptions.add(...)
+  }
+
+  ionViewWillUnload() {
+    this.subscriptions.unsubscribe();
+  }
+```
+
+- `complete`が発生すると自動的に`unsubscribe`されるため、手動で管理不要。
+  - httpリクエストのように1回で終わるもの
+- `complete`しないけど1回しか必要ない場合は、`first()`や`.take(1)` 、`takeUntil()`などを使うとよい。
+
+```
+  this.userService.user$
+    .first()
+    .subscribe(user => ....)
+```
+---
+## .pattern[ページ以外のComponentで`ion-content`を使う]
+### 問題点
+`ion-content`は [ページに一つだけ存在する](https://ionicframework.com/docs/api/components/content/Content/)。
+ページ以外のComponentで使うと、ページに複数組み込んだときに破綻する。
+
+そもそも、なぜ`ion-content`をComponentで使いたいか？
+
+→ `ion-slides`の各スライドの中で、PullToRefreshしたかった。  
+→ `Refresher`が`ion-content`でしか使えない。。
+
+---
+## .pattern[ページ以外のComponentで`ion-content`を使う]
+### 解決策
+`ion-content`はページ以外のComponentで使わない。
+
+`Refresher`はComponentで使うのは諦める･･･  
+どうしてもPullToRefreshしたい場合は、
+`ion-scroll`は複数使えるため、それを使って自作する。
+---
+## .pattern[VirtualScrollを動的コンテンツに使用する]
+### 問題点
+モバイル端末ではDOMの数が増えすぎると、スクロールや諸々パフォーマンスが非常に劣化する。
+
+そこで、Ionicには[VirtualScroll](https://ionicframework.com/docs/api/components/virtual-scroll/VirtualScroll/)という
+仮想スクロールによるパフォーマンス向上を目指したコンポーネントがある。
+
+スクロール領域を予め計算し、DOMを使い回しているため、Itemの高さが動的に変更するのに追従できない。
+
+---
+## .pattern[VirtualScrollを動的コンテンツに使用する]
+### 解決策
+__VirtualScroll は使わない。__
+
+動的に変更しなくても、無限スクロールがうまくいかなかったり、諸々バグも多い。
+
+よほど特殊な事例じゃないと、うまくマッチしないかも。
+
+悲しいかな、人類にはまだ早い。
+---
+name: style
+
+# Style編
+
+スタイルに関するアンチパターン。
+
+ionicのスタイルはAngularのデフォルトとは違うため、注意が必要。
+
+---
+## .pattern[標準コンポーネントのスタイルをグローバルCSSに書く]
+### 問題点
+
+Ionicコンポーネントのスタイルは、グローバルのCSSで簡単に上書きできる。
+
+しかし、標準コンポーネントは ios/md/wp のスタイルがあり、
+よほどデザインに力を入れないと統一感を維持するのが難しい。
+
+安易に書くとバージョンアップ時に苦労する。
+
+---
+## .pattern[標準コンポーネントのスタイルをグローバルCSSに書く]
+### 解決策
+
+先も言ったように、ほとんどは変数で指定できるので、それを使う。  
+→ [Overriding Ionic Sass Variables](https://ionicframework.com/docs/theming/overriding-ionic-variables/)
+
+プラットフォーム毎の指定などもできる。
+
+プラットフォームを固定してしまうのもあり。  .small[（むしろ個人的には推奨）]
+
+どうしてもできない場合.small[（ままある）]は、がんばる  
+.small[（ベストプラクティス模索中）]
+
+---
+## .pattern[`ion-card`を多用する]
+### 問題点
+マテリアルデザインぽくカードレイアウトを使いたくなるときがある。
+
+そこで`ion-card`を多用するとパフォーマンスが悪くなることがある。
+
+box-shadowとか多用されており、無限スクロールするリストの要素などに使うと
+パフォーマンスがよくない。
+
+特に古い端末で顕著に。
+
+---
+## .pattern[`ion-card`を多用する]
+### 解決策
+
+`ion-card`は設定項目など、有限個なアイテムにとどめる。
+
+実機確認大事。
+特に古い端末での確認。
+
+AWS Device Farmなど、リモートデバックツールでも確認できるが、
+パフォーマンスチェックには厳しい。
+
+やはり現物確認したいところ。
+
+---
+## .pattern[@Componentのstylesを使用する]
+### 問題点
+Angularでは @Comonentでstylesを使うと、デフォルトでは ViewEncapsulation.Emulated になる。
+
+動的に割り当てられた属性値スコープにスタイルが適応されるため、
+ionicコンポーネントの内部要素にスタイルが当てられなくてツラい
+
+---
+## .pattern[@Componentのstylesを使用する]
+### 解決策
+stylesで指定せず、ionic cliでコンパイルする。
+
+ionic cli はコンポーネントと同じディレクトリにあるスタイルファイルを自動的に取り込んでくれる。
+コンポーネントのセレクタでスタイリングすればいい。
+
+そもそも、コンポーネントの内部要素に外から手を加えようというのがまずい。。
+
+---
+## .pattern[CSS Utilitiesの属性スタイルを使う]
+### 問題点
+Ionic には [CSS Utilities](https://ionicframework.com/docs/theming/css-utilities/) という
+属性でスタイルを簡単に設定できるディレクティブがある。
+
+```
+<ion-card text-center padding>...</ion-card>
+```
+
+多用すると、styleファイルなのかHTMLなのか、どこでスタイルが定義されてるのが追うのがツラい。
+
+---
+## .pattern[CSS Utilitiesの属性スタイルを使う]
+### 解決策
+
+CSS Utilities はなるべく使わない。
+
+使うとしても、コンポーネントの内部など、見通しのいいところで使う。
+
+そもそも、コンポーネントでmarginやpaddingを多用するのは良くないという話しも。
+
+参考: [これからのCSSはmargin禁止！？CSSグリッドレイアウトやコンポーネント指向なCSSについて、矢倉さんに聞いてきた！](https://html5experts.jp/shumpei-shiraishi/24439/)
+---
+name: routing
+
+# Routing
+PWAを実現するにはURLルーティングが必要です。
+
+Ionicには（一応）URLルーティング機能がありますが、色々はまる。
+
+---
+## .pattern[タブ内でURLルーティングを行う]
+### 問題点
+
+[DeepLinker](https://ionicframework.com/docs/2.2.0/api/navigation/DeepLinker/)
+というモジュールを使ってURLルーティングを実現する。  
+参考: [Deeplinking in Ionic Apps](http://blog.ionic.io/deeplinking-in-ionic-apps/)
+
+nav.push()/pop() を行うとURLが切り替わる。  
+が、タブ内の遷移に色々問題がある。
+
+---
+## .pattern[タブ内でURLルーティングを行う]
+### 解決策
+__がんばる。__
+
+セグメントには`nav`や`tabs`というキーワードは予約されているため使えないので注意  
+（ドキュメントには載っていない）
+
+タブ内のページから、別のタブへ遷移するときは、一度タブのNavControllerを取得し、
+それを操作する必要がある。
+
+などなど罠が多い（詳しくはまた別途･･･）
+
+<!-- nav.setRoot() を使うと、タブ内で
+
+  - DIで挿入したNavController をそのまま使うと、タブ内で遷移してしまう。
+  - タブ外に遷移するには、app.getRootNav() でルートのNavControllerを取得し、setRoot する必要がある。
+      - URLの問題などもあるため要注意
+  - しかし、3.5からAPIが変更になった。。。 -->
+---
+name: backend
+
+# Backend
+
+Ionicから接続するバックエンドサービスをどうするか
+
+---
+## .pattern[Ionic Servicesを使う]
+### 問題点
+
+Ionicが提供するBaaS [Ionic Services](https://docs.ionic.io/services/) がある。
+
+Deploy や Push などの機能があるが、Authが無くなったりとProへ移行過渡期？
+
+---
+## .pattern[Ionic Servicesを使う]
+### 解決策
+Firebase を使う。
+
+BaaS使うなら、おとなしくFirebaseが一番。
+
+[angularfire2](https://github.com/angular/angularfire2)でもionicサポートがわりとある。  
+[Using AngularFire with Ionic 3](https://github.com/angular/angularfire2/blob/master/docs/ionic/v3.md)
+---
+name: native
+
+# Native
+iOS / Android のネイティブアプリが作れることがIonicの魅力。
+
+しかし、ここにも罠が沢山...
+
+---
+## .pattern[生の cordova-plugins を使う]
+### 問題点
+ほとんどの cordova-plugins は生のJavaScriptなので、
+そのまま使うと折角のTypeScriptの型が使えない。
+
+また、有名でもすでにdeprecatedになっているものも多い。
+
+---
+## .pattern[生の cordova-plugins を使う]
+### 解決策
+Ionicには ionic-native という cordova-plugins を TypeScript でラップしたものがある。
+これを使うと型安全。
+
+また、一応Ionicで動作を確認しているようで、それなりに使えるものが多い。
+（が、たまにバグってるので要検証）
+
+今後、[Cordova Plugin Initiative](http://blog.ionic.io/ionic-2017-18-roadmap/)と言っているので
+頑張って欲しい
+
+---
+## .pattern[UIWebView を使う]
+### 問題点
+
+iOSのデフォルトのWebViewコンポーネント、UIWebView はパフォーマンスが良くない。
+
+### 解決策
+WKWebViewを使う。
+
+iOSではほぼ必須。これないとパフォーマンス元々随分違う。  
+が、すでに 最新のionicではデフォルトが WKWebView になってるはず。
+
+Crosswalk も今となってはちょっと微妙。開発が終了している。
+---
+name: misc
+
+# Misc
+
+## .pattern[ionic-cliを使わない]
+自前のビルドシステムは諸々ツラい。  
+ただ、今後WebComponents へいくと、Angular CLIとの乖離が心配。
+
+## .pattern[Ionic標準Componentだけで全てなんとかしようと頑張る]
+標準Componentだけで済むなら、それに越したことは無い。  
+しかし、現実はそんなに簡単では無い。  
+
+内部DOMに手を入れて頑張るなら、自作した方が早いことも。  
+標準Componentは汎用的に作られているため、少々自由がきかないこともある。
+内部に手を入れるカスタマイズとかバージョンアップ対応で死ねる。
+
+## .pattern[後でまとめてバージョンアップする]
+結構変更激しいため、こまめにバージョンアップに追従した方がよい。
+内部APIに手を入れているとなおさら。
+---
+name: conclusion
+
+# Conclusion
+
+## .pattern[マルチプラットフォーム展開にIonicを使わない]
+お金がない、人がいないスタートアップでは、Webまで含めたマルチプラットフォーム展開は魅力的。
+
+これを活用しないのが最大のアンチパターン
+
+[TechFeed](https://techfeed.io)でどう使われているか確認してみてください！
+.center.techfeed-log[[
+  ![TechFeed Icon](./img/logo-app-and-text.png)
+](https://techfeed.io)]
+
+.presented-by[presented by [@dsuket](https://twitter.com/dsuket)]
+
+    </textarea>
+    <script src="https://gnab.github.io/remark/downloads/remark-latest.min.js"></script>
+    <script>window.remark || document.write(
+  '<script src="js/vendor/remark.min.js"><\/script>'
+)
+
+    </script>
+    <script src="js/vendor/remark-language.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
