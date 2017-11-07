@@ -13,4 +13,5 @@ name: conclusion
   ![TechFeed Icon](./img/logo-app-and-text.png)
 ](https://techfeed.io)]
 
-.presented-by[presented by [@dsuket](https://twitter.com/dsuket)]
+.presented-by[presented by [@dsuket](https://twitter.com/dsuket)]  
+.presented-by[[dsuket/ionic2-anti-pattern](https://github.com/dsuket/ionic2-anti-pattern)]
